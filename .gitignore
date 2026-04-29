@@ -1,0 +1,12 @@
+# Risk training artifacts
+*.log
+*.o*
+*.e*
+
+# Model checkpoints and local snapshots
+params/
+*.model
+!params.model
+
+# macOS
+.DS_Store

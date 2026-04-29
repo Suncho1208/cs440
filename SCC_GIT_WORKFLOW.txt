@@ -1,0 +1,23 @@
+SCC + Git workflow (Sun Cho)
+============================
+
+One-time on SCC:
+1) ssh suncho@scc1.bu.edu
+2) cd /projectnb/cs440/students/suncho
+3) git clone <your-repo-url> cs440
+
+Daily loop:
+Laptop:
+1) git add -A
+2) git commit -m "..."
+3) git push
+
+SCC:
+1) cd /projectnb/cs440/students/suncho/cs440
+2) git pull --ff-only
+3) qsub train.qsub.sh
+4) qstat -u suncho
+5) qacct -j <job_id>   (after completion, for diagnostics)
+
+Resume checkpoint run example:
+qsub -v EXTRA_ARGS="--inFile /projectnb/cs440/students/suncho/cs440/models/params10.model --outOffset 11" train.qsub.sh
