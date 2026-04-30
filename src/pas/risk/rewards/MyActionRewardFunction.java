@@ -48,13 +48,15 @@ public class MyActionRewardFunction
 
         if(action instanceof NoAction)
         {
-            return -0.05;
+            // Strongly negative: during eval (argmax, no exploration) a near-zero NoAction
+            // reward causes the model to always skip attacking, creating an infinite game loop
+            // (Thread 014 @397). Must be clearly the worst option in the attack phase.
+            return -3.0;
         }
 
         if(action instanceof RedeemCardsAction)
         {
-            // Small positive signal to discourage illegal skipping when trades are available.
-            return 0.2;
+            return 0.5;
         }
 
         if(action instanceof FortifyAction fortify)
@@ -62,7 +64,7 @@ public class MyActionRewardFunction
             final TerritoryOwnerView from = state.getTerritoryOwners().get(fortify.from());
             final TerritoryOwnerView to = state.getTerritoryOwners().get(fortify.to());
             final boolean legalFriendlyMove = from.getOwner() == myId && to.getOwner() == myId;
-            return legalFriendlyMove ? 0.15 : -0.5;
+            return legalFriendlyMove ? 0.3 : -1.5;
         }
 
         if(action instanceof AttackAction attack)
@@ -74,12 +76,15 @@ public class MyActionRewardFunction
 
             if(source.getOwner() != myId || target.getOwner() == myId)
             {
-                return -0.75;
+                return -2.0;
             }
 
+            // Reward attacking even at bad odds slightly — we need the model to
+            // prefer any attack over NoAction so eval games always terminate.
             final double ratio = sourceArmies / (double)Math.max(1, targetArmies);
-            final double pressure = attack.attackingArmies() / (double)Math.max(1, sourceArmies);
-            return 0.35 * Math.tanh(ratio - 1.0) + 0.25 * Math.tanh(pressure);
+            // Base reward: always positive (min ~+0.3) so attacks always beat NoAction (-3.0).
+            // Scales up to ~+2.5 for strong attacks.
+            return 0.3 + 2.2 * Math.tanh(Math.max(0, ratio - 0.5));
         }
 
         return 0.0;
