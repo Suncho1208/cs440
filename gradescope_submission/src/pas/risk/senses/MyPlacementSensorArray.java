@@ -21,6 +21,10 @@ public class MyPlacementSensorArray
 {
 
     public static final int NUM_FEATURES = 5;
+    private static double squashCount(final double value, final double scale)
+    {
+        return Math.tanh(value / scale);
+    }
 
     public MyPlacementSensorArray(final int agentId)
     {
@@ -35,7 +39,6 @@ public class MyPlacementSensorArray
         final int myId = this.getAgentId();
         final TerritoryOwnerView territoryView = state.getTerritoryOwners().get(territory);
 
-        int adjacentAllies = 0;
         int adjacentEnemies = 0;
         int adjacentEnemyArmies = 0;
         for(Territory adjacent : territory.adjacentTerritories())
@@ -43,22 +46,19 @@ public class MyPlacementSensorArray
             final TerritoryOwnerView adjacentView = state.getTerritoryOwners().get(adjacent);
             if(adjacentView.getOwner() == myId)
             {
-                adjacentAllies += 1;
+                continue;
             }
-            else
-            {
-                adjacentEnemies += 1;
-                adjacentEnemyArmies += adjacentView.getArmies();
-            }
+            adjacentEnemies += 1;
+            adjacentEnemyArmies += adjacentView.getArmies();
         }
 
         final int myBonusArmies = state.getBonusArmiesFor(myId);
         final int totalTerritories = Math.max(1, state.getBoard().territories().size());
 
         int c = 0;
-        features.set(0, c++, territoryView.getArmies() / 20.0);
+        features.set(0, c++, squashCount(territoryView.getArmies(), 10.0));
         features.set(0, c++, adjacentEnemies / (double)Math.max(1, territory.adjacentTerritories().size()));
-        features.set(0, c++, adjacentEnemyArmies / 50.0);
+        features.set(0, c++, squashCount(adjacentEnemyArmies, 14.0));
         features.set(0, c++, numRemainingArmies / (double)Math.max(1, myBonusArmies));
         features.set(0, c++, territory.id() / (double)totalTerritories);
 

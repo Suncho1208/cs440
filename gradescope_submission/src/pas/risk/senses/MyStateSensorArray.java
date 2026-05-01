@@ -8,7 +8,6 @@ import edu.bu.pas.risk.GameView;
 import edu.bu.pas.risk.TerritoryOwnerView;
 import edu.bu.pas.risk.agent.senses.StateSensorArray;
 import edu.bu.pas.risk.territory.Territory;
-import edu.bu.pas.risk.territory.TerritoryCard;
 
 
 // JAVA PROJECT IMPORTS
@@ -21,6 +20,10 @@ public class MyStateSensorArray
     extends StateSensorArray
 {
     public static final int NUM_FEATURES = 15;
+    private static double squashCount(final double value, final double scale)
+    {
+        return Math.tanh(value / scale);
+    }
 
     public MyStateSensorArray(final int agentId)
     {
@@ -115,14 +118,14 @@ public class MyStateSensorArray
         features.set(0, c++, myTerritoryFrac);
         features.set(0, c++, myArmyFrac);
         features.set(0, c++, borderFrac);
-        features.set(0, c++, state.getBonusArmiesFor(myId) / 20.0);
-        features.set(0, c++, cardsInHand / 10.0);
+        features.set(0, c++, squashCount(state.getBonusArmiesFor(myId), 12.0));
+        features.set(0, c++, Math.tanh(Math.log1p(cardsInHand)));
         features.set(0, c++, (double)unownedTerritories / totalTerritories);
-        features.set(0, c++, state.getNumTurns() / 1000.0);
-        features.set(0, c++, state.getNumPreviousRedemptions() / 100.0);
-        features.set(0, c++, avgArmiesOnOwned / 10.0);
-        features.set(0, c++, myMaxArmiesOnTerritory / 20.0);
-        features.set(0, c++, minArmiesOnOwned / 10.0);
+        features.set(0, c++, Math.tanh(state.getNumTurns() / 400.0));
+        features.set(0, c++, Math.tanh(state.getNumPreviousRedemptions() / 10.0));
+        features.set(0, c++, squashCount(avgArmiesOnOwned, 8.0));
+        features.set(0, c++, squashCount(myMaxArmiesOnTerritory, 10.0));
+        features.set(0, c++, squashCount(minArmiesOnOwned, 6.0));
         features.set(0, c++, (double)continentsOwned / totalContinents);
         features.set(0, c++, (double)aliveOpponents / Math.max(1, numAgents - 1));
         features.set(0, c++, (myTerritories - maxOpponentTerritories) / (double)totalTerritories);

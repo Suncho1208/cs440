@@ -8,9 +8,16 @@ SUBMISSION_DIR="$ROOT_DIR/gradescope_submission"
 ZIP_PATH="$ROOT_DIR/gradescope-risk-submission.zip"
 
 if [[ ! -f "$ROOT_DIR/params.model" ]]; then
-  latest_model="$(ls -t "$ROOT_DIR"/params*.model 2>/dev/null | head -n 1 || true)"
+  latest_model=""
+  if [[ -d "$ROOT_DIR/models" ]]; then
+    latest_model="$(ls -t "$ROOT_DIR/models"/*.model 2>/dev/null | head -n 1 || true)"
+  fi
   if [[ -z "${latest_model}" ]]; then
-    echo "No model checkpoint found. Expected params.model or params*.model."
+    latest_model="$(ls -t "$ROOT_DIR"/params*.model 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -z "${latest_model}" ]]; then
+    echo "No model checkpoint found. Put a trained file at params.model, or pass one to:"
+    echo "  ./scripts/export_gradescope.sh models/<your_checkpoint>.model"
     exit 1
   fi
   cp "$latest_model" "$ROOT_DIR/params.model"

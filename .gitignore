@@ -3,10 +3,12 @@
 *.o*
 *.e*
 
-# Model checkpoints and local snapshots
+# Model checkpoints and local snapshots (never commit trained weights)
 params/
 *.model
-!params.model
+params.model
+gradescope_submission/params.model
+gradescope-risk-submission.zip
 
 # macOS
 .DS_Store
