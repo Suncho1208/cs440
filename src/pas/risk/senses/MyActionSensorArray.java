@@ -25,6 +25,10 @@ public class MyActionSensorArray
 {
 
     public static final int NUM_FEATURES = 10;
+    private static double squashCount(final double value, final double scale)
+    {
+        return Math.tanh(value / scale);
+    }
 
     public MyActionSensorArray(final int agentId)
     {
@@ -93,9 +97,9 @@ public class MyActionSensorArray
         features.set(0, c++, isFortify);
         features.set(0, c++, isRedeem);
         features.set(0, c++, isNoAction);
-        features.set(0, c++, sourceArmies / 20.0);
-        features.set(0, c++, targetArmies / 20.0);
-        features.set(0, c++, movedOrAttacking / 10.0);
+        features.set(0, c++, squashCount(sourceArmies, 10.0));
+        features.set(0, c++, squashCount(targetArmies, 10.0));
+        features.set(0, c++, squashCount(movedOrAttacking, 8.0));
         features.set(0, c++, ownsSource);
         features.set(0, c++, targetIsEnemy);
         features.set(0, c++, actionCounter / (double)totalTerritories);
