@@ -4,7 +4,7 @@ set -euo pipefail
 # Usage:
 #   ./run.sh [sequential-train-args...]
 # Example:
-#   ./run.sh --numCycles 200 --numTrainingGames 200 --numEvaluationGames 40
+#   ./run.sh --numCycles 200 --numTrainingGames 200 --numEvalGames 40
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"

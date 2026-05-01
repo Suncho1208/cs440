@@ -18,7 +18,7 @@ module load java/21 || true
 ./run.sh \
   --numCycles 250 \
   --numTrainingGames 150 \
-  --numEvaluationGames 40 \
+  --numEvalGames 40 \
   ${EXTRA_ARGS:-}
 
 # Resume example:
@@ -27,4 +27,4 @@ module load java/21 || true
 #   --outOffset 11 \
 #   --numCycles 250 \
 #   --numTrainingGames 150 \
-#   --numEvaluationGames 40
+#   --numEvalGames 40
