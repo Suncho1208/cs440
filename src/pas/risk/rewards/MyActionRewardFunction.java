@@ -79,12 +79,16 @@ public class MyActionRewardFunction
                 return -2.0;
             }
 
-            // Reward attacking even at bad odds slightly — we need the model to
-            // prefer any attack over NoAction so eval games always terminate.
             final double ratio = sourceArmies / (double)Math.max(1, targetArmies);
-            // Base reward: always positive (min ~+0.3) so attacks always beat NoAction (-3.0).
-            // Scales up to ~+2.5 for strong attacks.
-            return 0.3 + 2.2 * Math.tanh(Math.max(0, ratio - 0.5));
+            final double pressure = attack.attackingArmies() / (double)Math.max(1, sourceArmies);
+
+            // Thread 047 (@494): with a positive floor on every attack, the agent farms
+            // small positive rewards forever without winning (rational stalemate).
+            // Fix: center at 0 for 1:1 odds, negative for bad odds, positive for good odds.
+            // Range: approx [-2.0, +2.8]. All attacks still beat NoAction (-3.0) by a
+            // wide margin, so eval games still terminate — but the agent is NOT rewarded
+            // for pointless attacks and must push for a decisive win to accumulate positive returns.
+            return 2.5 * Math.tanh(ratio - 1.0) + 0.3 * Math.tanh(pressure);
         }
 
         return 0.0;
