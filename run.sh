@@ -17,10 +17,10 @@ LOG_FILE="${PROJECTNB_DIR}/logs/train-${STAMP}.log"
 OUT_PREFIX="${PROJECTNB_DIR}/models/params"
 
 echo "[run.sh] Compiling Risk sources..."
-javac -cp "./lib/*:." @risk.srcs
+javac -cp "./lib/*:./src:." -d ./src @risk.srcs
 
 echo "[run.sh] Launching SequentialTrain..."
 echo "[run.sh] Log: ${LOG_FILE}"
-java -cp "./lib/*:." edu.bu.pas.risk.SequentialTrain \
+java -cp "./lib/*:./src:." edu.bu.pas.risk.SequentialTrain \
   --outFile "${OUT_PREFIX}" \
   "$@" | tee "${LOG_FILE}"
