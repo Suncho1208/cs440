@@ -38,8 +38,8 @@ public class MyActionRewardFunction
         super(RewardType.FULL_TRANSITION, agentId);
     }
 
-    public double getLowerBound() { return -5.0; }
-    public double getUpperBound() { return 5.0; }
+    public double getLowerBound() { return -10.0; }
+    public double getUpperBound() { return 10.0; }
 
     /** {@inheritDoc} */
     public double getStateReward(final GameView state) { return 0.0; }
@@ -141,18 +141,25 @@ public class MyActionRewardFunction
             return this.getLowerBound(); // -5.0
         }
 
-        // Dense immediate reward: proportional to territory fraction in NEXT state.
-        // Thread @537: with γ=0.95 per action, sparse terminal signals are discounted
-        // to ~0 over 300+ steps. This gives a visible gradient at EVERY step regardless
-        // of γ, since the reward reflects "how much am I winning RIGHT NOW."
-        // Centers at 0 when owning 50% of territories.
-        // Range: [-2.5, +2.5] for non-terminal steps.
-        final double terrFrac = (double) myNext / totalTerr;
-        final double terrReward = 5.0 * (terrFrac - 0.5);
+        // Binary capture/loss events: large enough to survive γ=0.95 discounting.
+        // Territory-fraction approach failed: 5*(21/42 - 0.5) = 0 every step since
+        // both players hover near 50% → zero gradient, model cannot learn.
+        //
+        // Capture at step 20: 3.0 * 0.95^20 = +1.07 contribution at Q(s_0) — VISIBLE.
+        // Capture at step 50: 3.0 * 0.95^50 = +0.23                        — visible.
+        // Model learns: "attacks that capture territory are worth taking."
+        final int gained = myNext - myPrev;
+        if(gained > 0)
+        {
+            return Math.min(this.getUpperBound() - 0.1, 3.0 * gained);
+        }
+        if(gained < 0)
+        {
+            return Math.max(this.getLowerBound() + 0.1, -2.0 * Math.abs(gained));
+        }
 
-        // Small per-step action shaping (0.2 scale) as a nudge — does not overwhelm
-        // the territory signal but keeps NoAction penalty alive for eval loop prevention.
-        return terrReward + 0.2 * this.getHalfTransitionReward(state, action);
+        // No territory change: fall back to per-step shaping.
+        return this.getHalfTransitionReward(state, action);
     }
 
 }
