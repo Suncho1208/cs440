@@ -4,6 +4,7 @@ package pas.risk.rewards;
 import edu.bu.pas.risk.GameView;
 import edu.bu.pas.risk.TerritoryOwnerView;
 import edu.bu.pas.risk.action.AttackAction;
+import edu.bu.pas.risk.territory.Territory;
 import edu.bu.pas.risk.action.Action;
 import edu.bu.pas.risk.action.FortifyAction;
 import edu.bu.pas.risk.action.NoAction;
@@ -48,10 +49,30 @@ public class MyActionRewardFunction
 
         if(action instanceof NoAction)
         {
-            // Strongly negative: during eval (argmax, no exploration) a near-zero NoAction
-            // reward causes the model to always skip attacking, creating an infinite game loop
-            // (Thread 014 @397). Must be clearly the worst option in the attack phase.
-            return -3.0;
+            // NoAction appears in TWO phases:
+            //   Attack phase: "I choose not to attack" → strongly penalize (-3.0) to prevent
+            //     infinite eval loops (Thread 014 @397) and force the model to attack.
+            //   Fortify phase: "I choose not to fortify" → completely normal, neutral (-0.1).
+            //
+            // Distinguish by checking if there are any legal attack targets right now.
+            // If any owned territory (≥2 armies) borders an enemy → we're in attack phase.
+            boolean hasLegalAttack = false;
+            for(TerritoryOwnerView tv : state.getTerritoryOwners())
+            {
+                if(tv.getOwner() == myId && tv.getArmies() >= 2)
+                {
+                    for(Territory adj : tv.getTerritory().adjacentTerritories())
+                    {
+                        if(state.getTerritoryOwners().get(adj).getOwner() != myId)
+                        {
+                            hasLegalAttack = true;
+                            break;
+                        }
+                    }
+                }
+                if(hasLegalAttack) break;
+            }
+            return hasLegalAttack ? -3.0 : -0.1;
         }
 
         if(action instanceof RedeemCardsAction)
