@@ -32,7 +32,10 @@ public class MyActionRewardFunction
 
     public MyActionRewardFunction(final int agentId)
     {
-        super(RewardType.HALF_TRANSITION, agentId);
+        // FULL_TRANSITION: we need nextState to detect terminal win/loss.
+        // Thread @542: "make sure there's a big gap between winning/losing situations."
+        // HALF_TRANSITION cannot see game end → model never learns winning matters.
+        super(RewardType.FULL_TRANSITION, agentId);
     }
 
     public double getLowerBound() { return -5.0; }
@@ -41,6 +44,8 @@ public class MyActionRewardFunction
     /** {@inheritDoc} */
     public double getStateReward(final GameView state) { return 0.0; }
 
+    // Per-step shaping helper (used internally by getFullTransitionReward).
+    // Kept scaled to roughly [-1.5, +1.0] so terminal signals (+5/-5) dominate.
     /** {@inheritDoc} */
     public double getHalfTransitionReward(final GameView state,
                                           final Action action)
@@ -49,13 +54,7 @@ public class MyActionRewardFunction
 
         if(action instanceof NoAction)
         {
-            // NoAction appears in TWO phases:
-            //   Attack phase: "I choose not to attack" → strongly penalize (-3.0) to prevent
-            //     infinite eval loops (Thread 014 @397) and force the model to attack.
-            //   Fortify phase: "I choose not to fortify" → completely normal, neutral (-0.1).
-            //
-            // Distinguish by checking if there are any legal attack targets right now.
-            // If any owned territory (≥2 armies) borders an enemy → we're in attack phase.
+            // Distinguish attack-phase skip (bad) from fortify-phase skip (normal).
             boolean hasLegalAttack = false;
             for(TerritoryOwnerView tv : state.getTerritoryOwners())
             {
@@ -72,44 +71,34 @@ public class MyActionRewardFunction
                 }
                 if(hasLegalAttack) break;
             }
-            return hasLegalAttack ? -3.0 : -0.1;
+            // Attack-phase skip: -1.5 (still beats worst attacks so eval never infinite-loops).
+            // Fortify-phase skip: -0.05 (neutral end-of-turn).
+            return hasLegalAttack ? -1.5 : -0.05;
         }
 
         if(action instanceof RedeemCardsAction)
         {
-            return 0.5;
+            return 0.2;
         }
 
         if(action instanceof FortifyAction fortify)
         {
             final TerritoryOwnerView from = state.getTerritoryOwners().get(fortify.from());
-            final TerritoryOwnerView to = state.getTerritoryOwners().get(fortify.to());
-            final boolean legalFriendlyMove = from.getOwner() == myId && to.getOwner() == myId;
-            return legalFriendlyMove ? 0.3 : -1.5;
+            final TerritoryOwnerView to   = state.getTerritoryOwners().get(fortify.to());
+            return (from.getOwner() == myId && to.getOwner() == myId) ? 0.1 : -0.5;
         }
 
         if(action instanceof AttackAction attack)
         {
             final TerritoryOwnerView source = state.getTerritoryOwners().get(attack.from());
             final TerritoryOwnerView target = state.getTerritoryOwners().get(attack.to());
-            final int sourceArmies = source.getArmies();
-            final int targetArmies = target.getArmies();
+            if(source.getOwner() != myId || target.getOwner() == myId) { return -0.5; }
 
-            if(source.getOwner() != myId || target.getOwner() == myId)
-            {
-                return -2.0;
-            }
-
-            final double ratio = sourceArmies / (double)Math.max(1, targetArmies);
-            final double pressure = attack.attackingArmies() / (double)Math.max(1, sourceArmies);
-
-            // Thread 047 (@494): with a positive floor on every attack, the agent farms
-            // small positive rewards forever without winning (rational stalemate).
-            // Fix: center at 0 for 1:1 odds, negative for bad odds, positive for good odds.
-            // Range: approx [-2.0, +2.8]. All attacks still beat NoAction (-3.0) by a
-            // wide margin, so eval games still terminate — but the agent is NOT rewarded
-            // for pointless attacks and must push for a decisive win to accumulate positive returns.
-            return 2.5 * Math.tanh(ratio - 1.0) + 0.3 * Math.tanh(pressure);
+            final double ratio    = source.getArmies() / (double)Math.max(1, target.getArmies());
+            final double pressure = attack.attackingArmies() / (double)Math.max(1, source.getArmies());
+            // Centered at 0 for 1:1 odds, negative for bad odds, positive for good odds.
+            // Range ≈ [-1.0, +1.1] — always better than NoAction (-1.5).
+            return 1.0 * Math.tanh(ratio - 1.0) + 0.1 * Math.tanh(pressure);
         }
 
         return 0.0;
@@ -118,7 +107,58 @@ public class MyActionRewardFunction
     /** {@inheritDoc} */
     public double getFullTransitionReward(final GameView state,
                                           final Action action,
-                                          final GameView nextState) { return this.getHalfTransitionReward(state, action); }
+                                          final GameView nextState)
+    {
+        if(nextState == null)
+        {
+            return this.getHalfTransitionReward(state, action);
+        }
+
+        final int myId           = this.getAgentId();
+        final int totalTerr      = state.getBoard().territories().size();
+
+        int myPrev = 0;
+        for(TerritoryOwnerView t : state.getTerritoryOwners())
+        {
+            if(t.getOwner() == myId) myPrev++;
+        }
+
+        int myNext = 0;
+        for(TerritoryOwnerView t : nextState.getTerritoryOwners())
+        {
+            if(t.getOwner() == myId) myNext++;
+        }
+
+        // Terminal WIN — own every territory.
+        if(myNext == totalTerr)
+        {
+            return this.getUpperBound(); // +5.0
+        }
+
+        // Terminal LOSE — just got eliminated (had territories, now have none).
+        if(myNext == 0 && myPrev > 0)
+        {
+            return this.getLowerBound(); // -5.0
+        }
+
+        // Dense progress signal: reward/penalize territory changes immediately.
+        // This propagates the win/lose gradient back without relying on distant γ^T.
+        final int gained = myNext - myPrev;
+        if(gained > 0)
+        {
+            // Captured at least one territory this action — strong positive.
+            return Math.min(this.getUpperBound() - 0.01, 2.0 * gained);
+        }
+        if(gained < 0)
+        {
+            // Lost territory (took it back by enemy on their turn — handled via nextState
+            // during our own action sequence this means we were eliminated somehow).
+            return Math.max(this.getLowerBound() + 0.01, -1.5 * Math.abs(gained));
+        }
+
+        // No territory change: use per-step shaping.
+        return this.getHalfTransitionReward(state, action);
+    }
 
 }
 
