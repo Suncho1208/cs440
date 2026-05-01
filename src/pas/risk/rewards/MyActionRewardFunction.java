@@ -114,8 +114,8 @@ public class MyActionRewardFunction
             return this.getHalfTransitionReward(state, action);
         }
 
-        final int myId           = this.getAgentId();
-        final int totalTerr      = state.getBoard().territories().size();
+        final int myId      = this.getAgentId();
+        final int totalTerr = Math.max(1, nextState.getBoard().territories().size());
 
         int myPrev = 0;
         for(TerritoryOwnerView t : state.getTerritoryOwners())
@@ -135,29 +135,24 @@ public class MyActionRewardFunction
             return this.getUpperBound(); // +5.0
         }
 
-        // Terminal LOSE — just got eliminated (had territories, now have none).
+        // Terminal LOSE — just got eliminated.
         if(myNext == 0 && myPrev > 0)
         {
             return this.getLowerBound(); // -5.0
         }
 
-        // Dense progress signal: reward/penalize territory changes immediately.
-        // This propagates the win/lose gradient back without relying on distant γ^T.
-        final int gained = myNext - myPrev;
-        if(gained > 0)
-        {
-            // Captured at least one territory this action — strong positive.
-            return Math.min(this.getUpperBound() - 0.01, 2.0 * gained);
-        }
-        if(gained < 0)
-        {
-            // Lost territory (took it back by enemy on their turn — handled via nextState
-            // during our own action sequence this means we were eliminated somehow).
-            return Math.max(this.getLowerBound() + 0.01, -1.5 * Math.abs(gained));
-        }
+        // Dense immediate reward: proportional to territory fraction in NEXT state.
+        // Thread @537: with γ=0.95 per action, sparse terminal signals are discounted
+        // to ~0 over 300+ steps. This gives a visible gradient at EVERY step regardless
+        // of γ, since the reward reflects "how much am I winning RIGHT NOW."
+        // Centers at 0 when owning 50% of territories.
+        // Range: [-2.5, +2.5] for non-terminal steps.
+        final double terrFrac = (double) myNext / totalTerr;
+        final double terrReward = 5.0 * (terrFrac - 0.5);
 
-        // No territory change: use per-step shaping.
-        return this.getHalfTransitionReward(state, action);
+        // Small per-step action shaping (0.2 scale) as a nudge — does not overwhelm
+        // the territory signal but keeps NoAction penalty alive for eval loop prevention.
+        return terrReward + 0.2 * this.getHalfTransitionReward(state, action);
     }
 
 }

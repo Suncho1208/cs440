@@ -73,26 +73,24 @@ public class RiskQAgent
         final int numActionFeatures = MyActionSensorArray.NUM_FEATURES;
         final int numPlacementFeatures = MyPlacementSensorArray.NUM_FEATURES;
 
-        final int stateEncodingDim = 96;
+        // Thread @542: student with smaller/simpler network got avg(wins)=0.1 at cycle 118.
+        // Smaller network converges faster and generalizes better for this task.
+        final int stateEncodingDim = 32;
         Sequential encoder = new Sequential();
-        encoder.add(new Dense(numStateFeatures, 160));
+        encoder.add(new Dense(numStateFeatures, 64));
         encoder.add(new ReLU());
-        encoder.add(new Dense(160, stateEncodingDim));
+        encoder.add(new Dense(64, stateEncodingDim));
         encoder.add(new ReLU());
 
         final int actionDecoderInputDim = stateEncodingDim + numActionFeatures;
         Sequential actionDecoder = new Sequential();
-        actionDecoder.add(new Dense(actionDecoderInputDim, 96));
-        actionDecoder.add(new ReLU());
-        actionDecoder.add(new Dense(96, 32));
+        actionDecoder.add(new Dense(actionDecoderInputDim, 32));
         actionDecoder.add(new ReLU());
         actionDecoder.add(new Dense(32, 1));
 
         final int placementDecoderInputDim = stateEncodingDim + numPlacementFeatures;
         Sequential placementDecoder = new Sequential();
-        placementDecoder.add(new Dense(placementDecoderInputDim, 96));
-        placementDecoder.add(new ReLU());
-        placementDecoder.add(new Dense(96, 32));
+        placementDecoder.add(new Dense(placementDecoderInputDim, 32));
         placementDecoder.add(new ReLU());
         placementDecoder.add(new Dense(32, 1));
 
